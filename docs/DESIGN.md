@@ -313,7 +313,7 @@ The guarantees, and where each one comes from:
 
 ## 8. How GenAI was used in the design phase
 
-See [AI-COLLABORATION.md](AI-COLLABORATION.md) for each step and its evidence. In short:
+See [AI-LOG.md](AI-LOG.md) for each step and its evidence. In short:
 - The AI produced option comparisons (stack, architecture, broker, API style) as weighted
   tables; I set or adjusted the weights against the brief's grading criteria and made each decision.
 - Claims that mattered were tested instead of trusted. The AI said a losing concurrent insert "gets

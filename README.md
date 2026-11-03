@@ -136,7 +136,7 @@ docs/                         requirements, design, decisions, AI log, benchmark
 - [System design](docs/DESIGN.md): architecture, sequence diagrams for each flow, consistency, scalability, observability
 - [Decisions](docs/DECISIONS.md): every choice with the options and trade-offs considered
 - [Booking concurrency benchmark](docs/benchmarks/BOOKING-CONCURRENCY.md): why one writer per dealership
-- [AI collaboration log](docs/AI-COLLABORATION.md)
+- [AI collaboration log](docs/AI-LOG.md)
 
 ## AI Collaboration Narrative
 
@@ -146,4 +146,4 @@ weighted comparison of options, and each one is recorded with its alternatives i
 Kafka rather than trusted, and every scenario was replayed on the running Docker Compose stack.
 
 The full account (how the work was split, each check, and what it caught, with links to the evidence) is
-in [docs/AI-COLLABORATION.md](docs/AI-COLLABORATION.md).
+in [docs/AI-LOG.md](docs/AI-LOG.md).
