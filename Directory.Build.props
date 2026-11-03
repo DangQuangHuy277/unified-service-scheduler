@@ -1,0 +1,11 @@
+<Project>
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- Some distro SDKs ship without the .NET 10 targeting pack; restore then fetches it from NuGet. -->
+    <AllowMissingPrunePackageData>true</AllowMissingPrunePackageData>
+  </PropertyGroup>
+</Project>

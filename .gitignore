@@ -1,0 +1,23 @@
+# env / secrets
+.env
+.env.*
+
+# IDE / OS
+.idea/
+.vscode/
+*.iml
+.DS_Store
+
+# build output (any stack)
+target/
+build/
+bin/
+obj/
+dist/
+node_modules/
+coverage/
+
+# per-user IDE settings
+*.user
+*.DotSettings.user
+

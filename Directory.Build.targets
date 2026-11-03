@@ -1,0 +1,8 @@
+<Project>
+  <!-- Distro-built SDKs report their own RID (e.g. arch-x64), which has no app host package on NuGet.
+       Use the portable linux-x64 app host instead; xunit v3 test projects require one. This lives in
+       .targets because the SDK defines NETCoreSdkRuntimeIdentifier after Directory.Build.props is read. -->
+  <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('Linux')) And '$(NETCoreSdkRuntimeIdentifier)' != '' And !$(NETCoreSdkRuntimeIdentifier.StartsWith('linux-'))">
+    <AppHostRuntimeIdentifier>linux-x64</AppHostRuntimeIdentifier>
+  </PropertyGroup>
+</Project>
