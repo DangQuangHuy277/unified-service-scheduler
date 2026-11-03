@@ -1,0 +1,3 @@
+<Project>
+  <!-- The benchmark is standalone: it does not inherit the solution build settings. -->
+</Project>
