@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="116 -34 1048 893" width="1048" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif">
+<rect x="116" y="-34" width="1048" height="893" fill="#ffffff"/>
+<rect x="380" y="-10" width="320" height="64" rx="14" fill="#a5d8ff" stroke="#1e1e1e" stroke-width="2"/>
+<rect x="300" y="110" width="480" height="120" rx="14" fill="#d0bfff" stroke="#1e1e1e" stroke-width="2"/>
+<rect x="360" y="290" width="360" height="84" rx="14" fill="#ffec99" stroke="#1e1e1e" stroke-width="2"/>
+<rect x="320" y="440" width="460" height="124" rx="14" fill="#ffd8a8" stroke="#1e1e1e" stroke-width="2"/>
+<rect x="140" y="640" width="720" height="140" rx="14" fill="#b2f2bb" stroke="#1e1e1e" stroke-width="2"/>
+<rect x="920" y="670" width="220" height="80" rx="14" fill="#ffd8a8" stroke="#1e1e1e" stroke-width="2"/>
+<rect x="920" y="460" width="220" height="84" rx="14" fill="#ffec99" stroke="#1e1e1e" stroke-width="2"/>
+<rect x="920" y="290" width="220" height="84" rx="14" fill="#ffd8a8" stroke="#1e1e1e" stroke-width="2"/>
+<line x1="420" y1="58" x2="420" y2="106" stroke="#1e1e1e" stroke-width="2"/>
+<polyline points="414.7,94.1 420,106 425.3,94.1" fill="none" stroke="#1e1e1e" stroke-width="2"/>
+<line x1="660" y1="106" x2="660" y2="58" stroke="#1e1e1e" stroke-width="2" stroke-dasharray="8 6"/>
+<polyline points="665.3,69.9 660,58 654.7,69.9" fill="none" stroke="#1e1e1e" stroke-width="2"/>
+<line x1="540" y1="234" x2="540" y2="286" stroke="#1e1e1e" stroke-width="2"/>
+<polyline points="534.7,274.1 540,286 545.3,274.1" fill="none" stroke="#1e1e1e" stroke-width="2"/>
+<line x1="540" y1="378" x2="540" y2="436" stroke="#1e1e1e" stroke-width="2"/>
+<polyline points="534.7,424.1 540,436 545.3,424.1" fill="none" stroke="#1e1e1e" stroke-width="2"/>
+<line x1="540" y1="568" x2="540" y2="636" stroke="#1e1e1e" stroke-width="2"/>
+<polyline points="534.7,624.1 540,636 545.3,624.1" fill="none" stroke="#1e1e1e" stroke-width="2"/>
+<line x1="160" y1="636" x2="300" y2="234" stroke="#1e1e1e" stroke-width="2" stroke-dasharray="8 6"/>
+<polyline points="301.1,247.0 300,234 291.1,243.5" fill="none" stroke="#1e1e1e" stroke-width="2"/>
+<line x1="864" y1="710" x2="916" y2="710" stroke="#1e1e1e" stroke-width="2"/>
+<polyline points="904.1,715.3 916,710 904.1,704.7" fill="none" stroke="#1e1e1e" stroke-width="2"/>
+<line x1="1030" y1="666" x2="1030" y2="548" stroke="#1e1e1e" stroke-width="2"/>
+<polyline points="1035.3,559.9 1030,548 1024.7,559.9" fill="none" stroke="#1e1e1e" stroke-width="2"/>
+<line x1="1030" y1="456" x2="1030" y2="378" stroke="#1e1e1e" stroke-width="2"/>
+<polyline points="1035.3,389.9 1030,378 1024.7,389.9" fill="none" stroke="#1e1e1e" stroke-width="2"/>
+<line x1="916" y1="350" x2="800" y2="636" stroke="#1e1e1e" stroke-width="2"/>
+<polyline points="799.5,623.0 800,636 809.4,627.0" fill="none" stroke="#1e1e1e" stroke-width="2"/>
+<text font-size="16" fill="#1e1e1e" text-anchor="middle"><tspan x="540.0" y="17.2">Client</tspan><tspan x="540.0" y="37.2">OpenAPI · Scheduler.http · cURL</tspan></text>
+<text font-size="15" fill="#1e1e1e" text-anchor="middle"><tspan x="540.0" y="146.8">ASP.NET Core API ×N  (controllers)</tspan><tspan x="540.0" y="165.5">validate against cached reference data</tspan><tspan x="540.0" y="184.2">register waiter → produce → wait ≤ 2 s</tspan><tspan x="540.0" y="203.0">GET /availability reads the read model</tspan></text>
+<rect x="344.7" y="71.2" width="150.6" height="21.5" rx="4" fill="#ffffff"/>
+<text font-size="14" fill="#1e1e1e" text-anchor="middle"><tspan x="420.0" y="86.5">POST /appointments</tspan></text>
+<rect x="573.1" y="71.2" width="173.7" height="21.5" rx="4" fill="#ffffff"/>
+<text font-size="14" fill="#1e1e1e" text-anchor="middle"><tspan x="660.0" y="86.5">201 · 409 · 422 · 202</tspan></text>
+<text font-size="16" fill="#1e1e1e" text-anchor="middle"><tspan x="540.0" y="327.2">Kafka: booking-commands</tspan><tspan x="540.0" y="347.2">16 partitions · key = dealership_id</tspan></text>
+<rect x="507.1" y="249.2" width="65.9" height="21.5" rx="4" fill="#ffffff"/>
+<text font-size="14" fill="#1e1e1e" text-anchor="middle"><tspan x="540.0" y="264.6">produce</tspan></text>
+<text font-size="15" fill="#1e1e1e" text-anchor="middle"><tspan x="550.0" y="478.8">Booking worker ×M: one owner per partition</tspan><tspan x="550.0" y="497.5">fence epoch → skip decided ids →</tspan><tspan x="550.0" y="516.2">decide in memory (DealershipSchedule)</tspan><tspan x="550.0" y="535.0">one transaction per batch (≤ 64)</tspan></text>
+<rect x="480.1" y="396.2" width="119.8" height="21.5" rx="4" fill="#ffffff"/>
+<text font-size="14" fill="#1e1e1e" text-anchor="middle"><tspan x="540.0" y="411.6">consumer group</tspan></text>
+<text font-size="15" fill="#1e1e1e" text-anchor="middle"><tspan x="500.0" y="686.8">PostgreSQL</tspan><tspan x="500.0" y="705.5">appointment + EXCLUDE (tech, slot) / (bay, slot) = backstop</tspan><tspan x="500.0" y="724.2">booking_request · customer · vehicle · partition_lease</tspan><tspan x="500.0" y="743.0">outbox_message · read.availability_busy</tspan></text>
+<rect x="426.2" y="591.2" width="227.6" height="21.5" rx="4" fill="#ffffff"/>
+<text font-size="14" fill="#1e1e1e" text-anchor="middle"><tspan x="540.0" y="606.5">rows + outbox + NOTIFY, 1 tx</tspan></text>
+<rect x="139.3" y="424.2" width="181.4" height="21.5" rx="4" fill="#ffffff"/>
+<text font-size="14" fill="#1e1e1e" text-anchor="middle"><tspan x="230.0" y="439.6">NOTIFY booking_decided</tspan></text>
+<text font-size="16" fill="#1e1e1e" text-anchor="middle"><tspan x="1030.0" y="715.2">Outbox relay</tspan></text>
+<text font-size="16" fill="#1e1e1e" text-anchor="middle"><tspan x="1030.0" y="497.2">Kafka:</tspan><tspan x="1030.0" y="517.2">appointment-events</tspan></text>
+<rect x="997.0" y="596.2" width="65.9" height="21.5" rx="4" fill="#ffffff"/>
+<text font-size="14" fill="#1e1e1e" text-anchor="middle"><tspan x="1030.0" y="611.5">publish</tspan></text>
+<text font-size="16" fill="#1e1e1e" text-anchor="middle"><tspan x="1030.0" y="327.2">Availability</tspan><tspan x="1030.0" y="347.2">projector</tspan></text>
+<rect x="813.5" y="482.2" width="89.0" height="21.5" rx="4" fill="#ffffff"/>
+<text font-size="14" fill="#1e1e1e" text-anchor="middle"><tspan x="858.0" y="497.6">read model</tspan></text>
+<text font-size="14" fill="#495057" text-anchor="start"><tspan x="140.0" y="813.3">API, workers, relay and projector export traces, metrics and logs over OTLP (the Aspire dashboard in docker compose).</tspan><tspan x="140.0" y="830.8">One trace runs from POST /appointments through the Kafka publish to the worker's booking decision.</tspan></text>
+</svg>
