@@ -1,0 +1,758 @@
+{
+    "openapi": "3.1.1",
+    "info": {
+        "title": "Unified Service Scheduler API",
+        "description": "Books workshop appointments only when a qualified technician and a service bay are both free for the whole service duration. POST /appointments answers 201 (confirmed), 409 (no capacity), 422 (cannot be booked as asked) or 202 (still deciding: poll the Location). Send Idempotency-Key to make retries safe.",
+        "version": "1.0.0"
+    },
+    "servers": [
+        {
+            "url": "http://localhost:8080/"
+        }
+    ],
+    "paths": {
+        "/appointments": {
+            "post": {
+                "tags": [
+                    "Appointments"
+                ],
+                "summary": "Request an appointment.",
+                "description": "Validates the request, enqueues it for the worker that owns the dealership, and waits up to 2 s\n(or `Prefer: wait=N`, max 10; `Prefer: respond-async` to not wait) for the decision.\n201 = confirmed, 409 = no capacity, 422 = cannot be booked as asked, 202 = still deciding: poll the Location.\nSend `Idempotency-Key` to make retries safe.",
+                "parameters": [
+                    {
+                        "name": "Idempotency-Key",
+                        "in": "header",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "Prefer",
+                        "in": "header",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/BookAppointmentRequest"
+                            },
+                            "example": {
+                                "dealershipId": 1,
+                                "serviceType": "OIL",
+                                "start": "2027-06-16T09:00:00+01:00",
+                                "customer": {
+                                    "name": "Ava Thompson",
+                                    "email": "ava.thompson@example.com"
+                                },
+                                "vehicle": {
+                                    "vin": "WVWZZZ1KZAW000001",
+                                    "make": "Volkswagen",
+                                    "model": "Golf"
+                                }
+                            }
+                        },
+                        "text/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/BookAppointmentRequest"
+                            }
+                        },
+                        "application/*+json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/BookAppointmentRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AppointmentResponse"
+                                }
+                            }
+                        }
+                    },
+                    "202": {
+                        "description": "Accepted",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/BookingRequestStatus"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ValidationProblemDetails"
+                                }
+                            },
+                            "application/json": {}
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProblemDetails"
+                                }
+                            },
+                            "application/json": {}
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProblemDetails"
+                                }
+                            },
+                            "application/json": {}
+                        }
+                    }
+                }
+            }
+        },
+        "/appointments/{id}": {
+            "get": {
+                "tags": [
+                    "Appointments"
+                ],
+                "summary": "A confirmed appointment with its customer, vehicle, technician and bay.",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "pattern": "^-?(?:0|[1-9]\\d*)$",
+                            "type": "integer",
+                            "format": "int64"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AppointmentResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProblemDetails"
+                                }
+                            },
+                            "application/json": {}
+                        }
+                    }
+                }
+            }
+        },
+        "/availability": {
+            "get": {
+                "tags": [
+                    "Availability"
+                ],
+                "summary": "Start times that currently fit a service on one local day.",
+                "description": "Served from the availability read model, which trails bookings by the projection delay. A slot shown\nhere can still be taken by the time it is booked; the booking then answers 409.",
+                "parameters": [
+                    {
+                        "name": "DealershipId",
+                        "in": "query",
+                        "schema": {
+                            "pattern": "^-?(?:0|[1-9]\\d*)$",
+                            "type": [
+                                "integer",
+                                "string"
+                            ],
+                            "format": "int32"
+                        }
+                    },
+                    {
+                        "name": "ServiceType",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "Date",
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AvailabilityResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ValidationProblemDetails"
+                                }
+                            },
+                            "application/json": {}
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProblemDetails"
+                                }
+                            },
+                            "application/json": {}
+                        }
+                    }
+                }
+            }
+        },
+        "/booking-requests/{id}": {
+            "get": {
+                "tags": [
+                    "BookingRequests"
+                ],
+                "summary": "Status of a booking request: pending (202), confirmed or rejected (200).",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/BookingRequestStatus"
+                                }
+                            }
+                        }
+                    },
+                    "202": {
+                        "description": "Accepted",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/BookingRequestStatus"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProblemDetails"
+                                }
+                            },
+                            "application/json": {}
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "AppointmentResponse": {
+                "required": [
+                    "id",
+                    "requestId",
+                    "dealership",
+                    "service",
+                    "start",
+                    "end",
+                    "technician",
+                    "bay",
+                    "customer",
+                    "vehicle",
+                    "createdAt"
+                ],
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "pattern": "^-?(?:0|[1-9]\\d*)$",
+                        "type": [
+                            "integer",
+                            "string"
+                        ],
+                        "format": "int64"
+                    },
+                    "requestId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "dealership": {
+                        "$ref": "#/components/schemas/NamedRefOfint"
+                    },
+                    "service": {
+                        "$ref": "#/components/schemas/NamedRefOfstring"
+                    },
+                    "start": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "end": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "technician": {
+                        "$ref": "#/components/schemas/NamedRefOfint"
+                    },
+                    "bay": {
+                        "$ref": "#/components/schemas/NamedRefOfint"
+                    },
+                    "customer": {
+                        "$ref": "#/components/schemas/CustomerResponse"
+                    },
+                    "vehicle": {
+                        "$ref": "#/components/schemas/VehicleResponse"
+                    },
+                    "createdAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    }
+                },
+                "description": "Times are given in the dealership's local offset, so \"09:00+01:00\" reads as the customer sees it."
+            },
+            "AvailabilityResponse": {
+                "required": [
+                    "dealershipId",
+                    "serviceType",
+                    "date",
+                    "timeZone",
+                    "generatedAt",
+                    "slots"
+                ],
+                "type": "object",
+                "properties": {
+                    "dealershipId": {
+                        "pattern": "^-?(?:0|[1-9]\\d*)$",
+                        "type": [
+                            "integer",
+                            "string"
+                        ],
+                        "format": "int32"
+                    },
+                    "serviceType": {
+                        "type": "string"
+                    },
+                    "date": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "timeZone": {
+                        "type": "string"
+                    },
+                    "generatedAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "slots": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/AvailableSlot"
+                        }
+                    }
+                }
+            },
+            "AvailableSlot": {
+                "required": [
+                    "start",
+                    "end"
+                ],
+                "type": "object",
+                "properties": {
+                    "start": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "end": {
+                        "type": "string",
+                        "format": "date-time"
+                    }
+                }
+            },
+            "BookAppointmentRequest": {
+                "required": [
+                    "serviceType",
+                    "start",
+                    "customer",
+                    "vehicle"
+                ],
+                "type": "object",
+                "properties": {
+                    "dealershipId": {
+                        "maximum": 2147483647,
+                        "minimum": 1,
+                        "pattern": "^-?(?:0|[1-9]\\d*)$",
+                        "type": [
+                            "integer",
+                            "string"
+                        ],
+                        "format": "int32"
+                    },
+                    "serviceType": {
+                        "type": [
+                            "null",
+                            "string"
+                        ]
+                    },
+                    "start": {
+                        "type": [
+                            "null",
+                            "string"
+                        ],
+                        "format": "date-time"
+                    },
+                    "customer": {
+                        "oneOf": [
+                            {
+                                "type": "null"
+                            },
+                            {
+                                "$ref": "#/components/schemas/CustomerInput"
+                            }
+                        ]
+                    },
+                    "vehicle": {
+                        "oneOf": [
+                            {
+                                "type": "null"
+                            },
+                            {
+                                "$ref": "#/components/schemas/VehicleInput"
+                            }
+                        ]
+                    }
+                }
+            },
+            "BookingRequestStatus": {
+                "required": [
+                    "requestId",
+                    "status",
+                    "outcome",
+                    "appointmentId",
+                    "decidedAt"
+                ],
+                "type": "object",
+                "properties": {
+                    "requestId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "status": {
+                        "type": "string"
+                    },
+                    "outcome": {
+                        "type": [
+                            "null",
+                            "string"
+                        ]
+                    },
+                    "appointmentId": {
+                        "pattern": "^-?(?:0|[1-9]\\d*)$",
+                        "type": [
+                            "null",
+                            "integer",
+                            "string"
+                        ],
+                        "format": "int64"
+                    },
+                    "decidedAt": {
+                        "type": [
+                            "null",
+                            "string"
+                        ],
+                        "format": "date-time"
+                    }
+                }
+            },
+            "CustomerInput": {
+                "required": [
+                    "name",
+                    "email"
+                ],
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "maxLength": 200,
+                        "minLength": 0,
+                        "type": [
+                            "null",
+                            "string"
+                        ]
+                    },
+                    "email": {
+                        "maxLength": 320,
+                        "minLength": 0,
+                        "type": [
+                            "null",
+                            "string"
+                        ]
+                    }
+                }
+            },
+            "CustomerResponse": {
+                "required": [
+                    "id",
+                    "name",
+                    "email"
+                ],
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "pattern": "^-?(?:0|[1-9]\\d*)$",
+                        "type": [
+                            "integer",
+                            "string"
+                        ],
+                        "format": "int64"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "email": {
+                        "type": "string"
+                    }
+                }
+            },
+            "NamedRefOfint": {
+                "required": [
+                    "id",
+                    "name"
+                ],
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "pattern": "^-?(?:0|[1-9]\\d*)$",
+                        "type": [
+                            "integer",
+                            "string"
+                        ],
+                        "format": "int32"
+                    },
+                    "name": {
+                        "type": "string"
+                    }
+                }
+            },
+            "NamedRefOfstring": {
+                "required": [
+                    "id",
+                    "name"
+                ],
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": [
+                            "null",
+                            "string"
+                        ]
+                    },
+                    "name": {
+                        "type": "string"
+                    }
+                }
+            },
+            "ProblemDetails": {
+                "type": "object",
+                "properties": {
+                    "type": {
+                        "type": [
+                            "null",
+                            "string"
+                        ]
+                    },
+                    "title": {
+                        "type": [
+                            "null",
+                            "string"
+                        ]
+                    },
+                    "status": {
+                        "pattern": "^-?(?:0|[1-9]\\d*)$",
+                        "type": [
+                            "null",
+                            "integer",
+                            "string"
+                        ],
+                        "format": "int32"
+                    },
+                    "detail": {
+                        "type": [
+                            "null",
+                            "string"
+                        ]
+                    },
+                    "instance": {
+                        "type": [
+                            "null",
+                            "string"
+                        ]
+                    }
+                }
+            },
+            "ValidationProblemDetails": {
+                "type": "object",
+                "properties": {
+                    "type": {
+                        "type": [
+                            "null",
+                            "string"
+                        ]
+                    },
+                    "title": {
+                        "type": [
+                            "null",
+                            "string"
+                        ]
+                    },
+                    "status": {
+                        "pattern": "^-?(?:0|[1-9]\\d*)$",
+                        "type": [
+                            "null",
+                            "integer",
+                            "string"
+                        ],
+                        "format": "int32"
+                    },
+                    "detail": {
+                        "type": [
+                            "null",
+                            "string"
+                        ]
+                    },
+                    "instance": {
+                        "type": [
+                            "null",
+                            "string"
+                        ]
+                    },
+                    "errors": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "VehicleInput": {
+                "required": [
+                    "vin",
+                    "make",
+                    "model"
+                ],
+                "type": "object",
+                "properties": {
+                    "vin": {
+                        "pattern": "^[A-HJ-NPR-Za-hj-npr-z0-9]{17}$",
+                        "type": [
+                            "null",
+                            "string"
+                        ]
+                    },
+                    "make": {
+                        "maxLength": 100,
+                        "minLength": 0,
+                        "type": [
+                            "null",
+                            "string"
+                        ]
+                    },
+                    "model": {
+                        "maxLength": 100,
+                        "minLength": 0,
+                        "type": [
+                            "null",
+                            "string"
+                        ]
+                    }
+                }
+            },
+            "VehicleResponse": {
+                "required": [
+                    "id",
+                    "vin",
+                    "make",
+                    "model"
+                ],
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "pattern": "^-?(?:0|[1-9]\\d*)$",
+                        "type": [
+                            "integer",
+                            "string"
+                        ],
+                        "format": "int64"
+                    },
+                    "vin": {
+                        "type": "string"
+                    },
+                    "make": {
+                        "type": "string"
+                    },
+                    "model": {
+                        "type": "string"
+                    }
+                }
+            }
+        }
+    },
+    "tags": [
+        {
+            "name": "Appointments"
+        },
+        {
+            "name": "Availability"
+        },
+        {
+            "name": "BookingRequests"
+        }
+    ]
+}

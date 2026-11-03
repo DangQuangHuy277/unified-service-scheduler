@@ -1,0 +1,9 @@
+**/bin/
+**/obj/
+.git/
+.claude/
+bench/
+docs/
+tests/
+deploy/docker-compose.yml
+*.md
