@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/Scheduler.Domain/Scheduler.Domain.csproj" />
+    <Project Path="src/Scheduler.Infrastructure/Scheduler.Infrastructure.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Scheduler.UnitTests/Scheduler.UnitTests.csproj" />
