@@ -1,0 +1,3 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Pure booking rules: no database, broker or HTTP dependencies. -->
+</Project>
