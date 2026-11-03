@@ -42,7 +42,7 @@ free for the **whole** service duration. The confirmed booking is stored.
 |---|---|
 | Problem solving & system design | DESIGN.md, DECISIONS.md (options with trade-offs), the concurrency ladder |
 | Technical execution | Code, tests, the concurrent-booking test |
-| AI engineering & verification | The README narrative, the AI collaboration log and the video |
+| AI engineering & verification | [AI-COLLABORATION.md](AI-COLLABORATION.md), the README narrative and the video |
 | Communication | README, DESIGN.md, video |
 
 ## Assumptions (the brief is ambiguous on purpose; each one goes in the design doc)

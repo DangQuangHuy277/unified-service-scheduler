@@ -136,3 +136,14 @@ docs/                         requirements, design, decisions, AI log, benchmark
 - [System design](docs/DESIGN.md): architecture, sequence diagrams for each flow, consistency, scalability, observability
 - [Decisions](docs/DECISIONS.md): every choice with the options and trade-offs considered
 - [Booking concurrency benchmark](docs/benchmarks/BOOKING-CONCURRENCY.md): why one writer per dealership
+- [AI collaboration log](docs/AI-COLLABORATION.md)
+
+## AI Collaboration Narrative
+
+I used an AI coding agent as the implementer and kept the decisions: every significant choice started as a
+weighted comparison of options, and each one is recorded with its alternatives in
+[DECISIONS.md](docs/DECISIONS.md). Claims the design depended on were tested against real Postgres and
+Kafka rather than trusted, and every scenario was replayed on the running Docker Compose stack.
+
+The full account (how the work was split, each check, and what it caught, with links to the evidence) is
+in [docs/AI-COLLABORATION.md](docs/AI-COLLABORATION.md).
