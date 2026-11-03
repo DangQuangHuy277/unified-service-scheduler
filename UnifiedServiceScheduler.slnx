@@ -2,6 +2,7 @@
   <Folder Name="/src/">
     <Project Path="src/Scheduler.Domain/Scheduler.Domain.csproj" />
     <Project Path="src/Scheduler.Infrastructure/Scheduler.Infrastructure.csproj" />
+    <Project Path="src/Scheduler.Worker/Scheduler.Worker.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Scheduler.UnitTests/Scheduler.UnitTests.csproj" />
