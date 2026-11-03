@@ -61,6 +61,7 @@ The four options considered before choosing this one are in [diagrams/](diagrams
 | Outbox relay | `src/Scheduler.Worker/ReadSide/OutboxRelay.cs` | Publishes `AppointmentConfirmed` events written in the booking transaction, so the database and Kafka can't disagree. |
 | Availability projector | `src/Scheduler.Worker/ReadSide/AvailabilityProjector.cs` | Builds `read.availability_busy` from events, idempotently. `GET /availability` runs the same domain planner over it. |
 | Infrastructure | `src/Scheduler.Infrastructure` | EF Core schema and migrations, the reference-data cache, Kafka setup, LISTEN helper, OpenTelemetry wiring, startup warm-up. |
+| Data access | `src/Scheduler.Infrastructure/Data` | Every query in the solution, behind purpose-named stores: `Shared/` (`ReferenceDataStore`, `ReadModelStore`), `Write/` (`LeaseStore`, `BookingStore`, `OutboxStore`, used by the Worker), `Read/` (`BookingReadQueries`, used by the Api). Stores run inside the caller's transaction; Api and Worker hold no SQL (D-011). |
 | PostgreSQL | migration `InitialSchema` | Source of truth. Exclusion constraints, the lease table for fencing, the outbox, and the read-model schema. |
 | Apache Kafka | KRaft, `apache/kafka:3.9.1` | Orders commands per dealership and assigns partitions to workers. |
 

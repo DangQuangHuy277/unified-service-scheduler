@@ -1,12 +1,13 @@
 using Microsoft.AspNetCore.Mvc;
 using Scheduler.Api.Booking;
+using Scheduler.Infrastructure.Data;
 
 namespace Scheduler.Api.Controllers;
 
 [ApiController]
 [Route("booking-requests")]
 [Produces("application/json")]
-public sealed class BookingRequestsController(BookingQueries queries, TimeProvider clock) : ControllerBase
+public sealed class BookingRequestsController(BookingReadQueries queries, TimeProvider clock) : ControllerBase
 {
     /// <summary>An id never seen after this long is unknown, not pending (UUIDv7 ids only).</summary>
     private static readonly TimeSpan PendingHorizon = TimeSpan.FromMinutes(5);

@@ -155,3 +155,34 @@ positional record parameters under their C# names (`Vehicle.Vin`) instead of the
 (`Swashbuckle.AspNetCore.SwaggerUI`) renders it, at `/swagger`. Chosen for presenter and reviewer familiarity;
 the document, its descriptions and the ready-to-send example for `POST /appointments` are unchanged.
 `/scalar` redirects to `/swagger`.
+
+## D-011: All queries behind a data-access layer in `Infrastructure/Data`; EF Core keeps the schema
+2026-11-04. **Decided.** SQL had spread over 7 classes in three projects, some of it inline in orchestration
+code (the batch processor, the outbox relay, the projector).
+
+**Options**
+- **A, keep as is.**
+- **B, all SQL, EF Core removed** (migrations as SQL scripts, hand-written reference-data mapping).
+- **C, hybrid.** EF Core keeps schema and migrations; every query moves behind purpose-named stores.
+
+| Criterion (why it matters) | Weight | A Keep | B All SQL | C Hybrid |
+|---|---|---|---|---|
+| Readability for the reviewer (all SQL in one place) | ×3 | 3/5 | 4/5 | 5/5 |
+| Correctness risk of the change (one transaction per batch must stay intact) | ×3 | 5/5 | 2/5 | 4/5 |
+| Testability | ×2 | 3/5 | 4/5 | 4/5 |
+| Migration tooling | ×2 | 5/5 | 3/5 | 5/5 |
+| Effort | ×2 | 5/5 | 2/5 | 4/5 |
+| Keyloop familiarity (postings list EF) | ×1 | 4/5 | 3/5 | 5/5 |
+| **Weighted total** (max 65) | | 54 (83%) | 39 (60%) | **58 (89%)** |
+
+**Placement.** `Scheduler.Infrastructure/Data`, foldered by consumer (`Shared/`, `Write/` for the Worker,
+`Read/` for the Api), over a separate project (76%), interfaces in an application layer (73%) and
+vertical feature folders (84%; ahead only if cohesion weighs ×4 or more).
+
+**Rules.** No generic `IRepository<T>`: it would force per-row writes and lose the `unnest` batching.
+Stores take the caller's `NpgsqlConnection`/`NpgsqlTransaction`, so the batch processor still runs
+fence → dedupe → decide → write → notify in one transaction and owns the order. No interfaces: the only
+second implementation would be a fake, and the tests deliberately run against real Postgres. Stores return
+data-layer records (`AppointmentDetails`, `DecidedBooking`); the Api maps them to its HTTP contract.
+Out of the layer on purpose: `PgNotifications` (LISTEN on a dedicated connection) and `DemoData` (the seed).
+

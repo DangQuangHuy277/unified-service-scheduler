@@ -3,6 +3,7 @@ using Microsoft.Extensions.Options;
 using Scheduler.Api.Booking;
 using Scheduler.Domain;
 using Scheduler.Infrastructure;
+using Scheduler.Infrastructure.Data;
 using Scheduler.Infrastructure.Messaging;
 
 namespace Scheduler.Api.Controllers;
@@ -14,7 +15,7 @@ public sealed class AppointmentsController(
     ReferenceDataCache reference,
     BookingCommandPublisher publisher,
     DecisionWaiter waiter,
-    BookingQueries queries,
+    BookingReadQueries queries,
     TimeProvider clock,
     IOptions<BookingOptions> options) : ControllerBase
 {
@@ -77,7 +78,7 @@ public sealed class AppointmentsController(
 
         if (decision.AppointmentId is { } appointmentId && await queries.FindAppointmentAsync(appointmentId, ct) is
                 { } appointment)
-            return Created($"/appointments/{appointmentId}", appointment);
+            return Created($"/appointments/{appointmentId}", appointment.ToResponse());
         return BookingProblems.Rejected(this, decision.Outcome, requestId);
     }
 
@@ -88,7 +89,7 @@ public sealed class AppointmentsController(
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound, "application/problem+json")]
     public async Task<IActionResult> Get(long id, CancellationToken ct) =>
         await queries.FindAppointmentAsync(id, ct) is { } appointment
-            ? Ok(appointment)
+            ? Ok(appointment.ToResponse())
             : Problem(statusCode: StatusCodes.Status404NotFound, title: "Unknown appointment");
 
     /// <summary>RFC 7240: <c>Prefer: wait=N</c> (seconds) or <c>Prefer: respond-async</c> (don't wait).</summary>

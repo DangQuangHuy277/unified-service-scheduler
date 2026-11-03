@@ -1,6 +1,7 @@
 using Confluent.Kafka;
 using Microsoft.Extensions.Options;
 using Scheduler.Infrastructure;
+using Scheduler.Infrastructure.Data;
 using Scheduler.Infrastructure.Messaging;
 
 namespace Scheduler.Worker.Booking;
@@ -13,7 +14,7 @@ namespace Scheduler.Worker.Booking;
 /// </summary>
 public sealed class BookingWorker(
     BookingBatchProcessor processor,
-    PartitionLeaseStore leases,
+    LeaseStore leases,
     PartitionOwnership ownership,
     IOptions<KafkaOptions> kafkaOptions,
     IOptions<BookingOptions> bookingOptions,

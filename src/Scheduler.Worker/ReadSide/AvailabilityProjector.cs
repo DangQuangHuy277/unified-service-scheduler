@@ -1,7 +1,7 @@
 using Confluent.Kafka;
 using Microsoft.Extensions.Options;
-using Npgsql;
 using Scheduler.Infrastructure;
+using Scheduler.Infrastructure.Data;
 using Scheduler.Infrastructure.Messaging;
 
 namespace Scheduler.Worker.ReadSide;
@@ -12,7 +12,7 @@ namespace Scheduler.Worker.ReadSide;
 /// after the rows are written. In production this table would live in a read replica or a separate store.
 /// </summary>
 public sealed class AvailabilityProjector(
-    NpgsqlDataSource db,
+    ReadModelStore readModel,
     TimeProvider clock,
     IOptions<KafkaOptions> kafkaOptions,
     IOptions<WorkerOptions> workerOptions,
@@ -78,22 +78,7 @@ public sealed class AvailabilityProjector(
 
     private async Task ProjectAsync(List<AppointmentConfirmedEvent> events, CancellationToken ct)
     {
-        await using var cmd = db.CreateCommand($"""
-            INSERT INTO read.availability_busy (appointment_id, dealership_id, technician_id, bay_id, slot, confirmed_at, projected_at)
-            SELECT a, d, t, b, tstzrange(s, e, '[)'), c, now()
-              FROM unnest($1::bigint[], $2::int[], $3::int[], $4::int[], $5::timestamptz[], $6::timestamptz[], $7::timestamptz[])
-                   AS x(a, d, t, b, s, e, c)
-            ON CONFLICT (appointment_id) DO NOTHING
-            """);
-        cmd.Parameters.Add(new() { Value = events.Select(e => e.AppointmentId).ToArray() });
-        cmd.Parameters.Add(new() { Value = events.Select(e => e.DealershipId).ToArray() });
-        cmd.Parameters.Add(new() { Value = events.Select(e => e.TechnicianId).ToArray() });
-        cmd.Parameters.Add(new() { Value = events.Select(e => e.BayId).ToArray() });
-        cmd.Parameters.Add(new() { Value = events.Select(e => e.Start).ToArray() });
-        cmd.Parameters.Add(new() { Value = events.Select(e => e.End).ToArray() });
-        cmd.Parameters.Add(new() { Value = events.Select(e => e.ConfirmedAt).ToArray() });
-        await cmd.ExecuteNonQueryAsync(ct);
-
+        await readModel.UpsertBusyAsync(events, ct);
         var now = clock.GetUtcNow().UtcDateTime;
         foreach (var e in events) SchedulerTelemetry.ProjectionLag.Record((now - e.ConfirmedAt).TotalMilliseconds);
     }

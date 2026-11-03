@@ -2,6 +2,7 @@ using System.Threading.Channels;
 using Confluent.Kafka;
 using Npgsql;
 using Scheduler.Infrastructure;
+using Scheduler.Infrastructure.Data;
 using Scheduler.Infrastructure.Messaging;
 
 namespace Scheduler.Worker.ReadSide;
@@ -12,7 +13,7 @@ namespace Scheduler.Worker.ReadSide;
 /// in the normal case; a crash between producing and marking can still resend, so consumers are idempotent.
 /// Events for one dealership can leave in a different order across relays; the projection doesn't depend on order.
 /// </summary>
-public sealed class OutboxRelay(NpgsqlDataSource db, KafkaProducer kafka, ILogger<OutboxRelay> log) : BackgroundService
+public sealed class OutboxRelay(NpgsqlDataSource db, OutboxStore outbox, KafkaProducer kafka, ILogger<OutboxRelay> log) : BackgroundService
 {
     private const int BatchSize = 500;
     private readonly Channel<bool> _wake = Channel.CreateBounded<bool>(new BoundedChannelOptions(1) { FullMode = BoundedChannelFullMode.DropWrite });
@@ -48,21 +49,7 @@ public sealed class OutboxRelay(NpgsqlDataSource db, KafkaProducer kafka, ILogge
         await using var conn = await db.OpenConnectionAsync(ct);
         await using var tx = await conn.BeginTransactionAsync(ct);
 
-        var rows = new List<(long Id, string Topic, string Key, string Payload)>();
-        await using (var select = new NpgsqlCommand("""
-            SELECT id, topic, key, payload::text FROM outbox_message
-             WHERE published_at IS NULL
-             ORDER BY id
-             LIMIT $1
-               FOR UPDATE SKIP LOCKED
-            """, conn, tx))
-        {
-            select.Parameters.Add(new() { Value = BatchSize });
-            await using var reader = await select.ExecuteReaderAsync(ct);
-            while (await reader.ReadAsync(ct))
-                rows.Add((reader.GetInt64(0), reader.GetString(1), reader.GetString(2), reader.GetString(3)));
-        }
-
+        var rows = await outbox.ClaimBatchAsync(conn, tx, BatchSize, ct);
         if (rows.Count > 0)
         {
             // Wait for every delivery: a row is only marked once Kafka has it.
@@ -73,19 +60,11 @@ public sealed class OutboxRelay(NpgsqlDataSource db, KafkaProducer kafka, ILogge
                 Headers = new Headers { { "type", System.Text.Encoding.UTF8.GetBytes(MessageJson.AppointmentConfirmed) } },
             }, ct)));
 
-            await using var mark = new NpgsqlCommand("UPDATE outbox_message SET published_at = now() WHERE id = ANY($1)", conn, tx);
-            mark.Parameters.Add(new() { Value = rows.Select(r => r.Id).ToArray() });
-            await mark.ExecuteNonQueryAsync(ct);
+            await outbox.MarkPublishedAsync(conn, tx, rows.Select(r => r.Id).ToArray(), ct);
         }
         await tx.CommitAsync(ct);
 
-        SchedulerTelemetry.ReportOutboxBacklog(rows.Count < BatchSize ? 0 : await CountBacklogAsync(ct));
+        SchedulerTelemetry.ReportOutboxBacklog(rows.Count < BatchSize ? 0 : await outbox.CountUnpublishedAsync(ct));
         return rows.Count;
-    }
-
-    private async Task<long> CountBacklogAsync(CancellationToken ct)
-    {
-        await using var cmd = db.CreateCommand("SELECT count(*) FROM outbox_message WHERE published_at IS NULL");
-        return (long)(await cmd.ExecuteScalarAsync(ct))!;
     }
 }

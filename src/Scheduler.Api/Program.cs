@@ -17,7 +17,6 @@ builder.AddSchedulerData()
 builder.Services.AddSingleton<DecisionWaiter>();
 builder.Services.AddHostedService<DecisionListener>();
 builder.Services.AddSingleton<BookingCommandPublisher>();
-builder.Services.AddSingleton<BookingQueries>();
 builder.Services.AddControllers(o =>
     // Validation errors are keyed by the JSON names clients send ("customer.email"), not C# property paths.
     o.ModelMetadataDetailsProviders.Add(new SystemTextJsonValidationMetadataProvider()));

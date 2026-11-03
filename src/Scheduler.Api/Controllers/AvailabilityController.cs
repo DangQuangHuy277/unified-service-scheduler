@@ -3,6 +3,7 @@ using Microsoft.Extensions.Options;
 using Scheduler.Api.Booking;
 using Scheduler.Domain;
 using Scheduler.Infrastructure;
+using Scheduler.Infrastructure.Data;
 
 namespace Scheduler.Api.Controllers;
 
@@ -11,7 +12,7 @@ namespace Scheduler.Api.Controllers;
 [Produces("application/json")]
 public sealed class AvailabilityController(
     ReferenceDataCache reference,
-    BookingQueries queries,
+    ReadModelStore readModel,
     TimeProvider clock,
     IOptions<BookingOptions> options) : ControllerBase
 {
@@ -37,12 +38,12 @@ public sealed class AvailabilityController(
         var dayStartUtc = TimeZoneInfo.ConvertTimeToUtc(date.ToDateTime(TimeOnly.MinValue), profile.TimeZone);
         var dayEndUtc = TimeZoneInfo.ConvertTimeToUtc(date.AddDays(1).ToDateTime(TimeOnly.MinValue), profile.TimeZone);
         var schedule = new DealershipSchedule(profile);
-        foreach (var (technicianId, bayId, busySlot) in await queries.BusyAsync(profile.Id, dayStartUtc, dayEndUtc, ct))
+        foreach (var (technicianId, bayId, busySlot) in await readModel.BusyAsync(profile.Id, dayStartUtc, dayEndUtc, ct))
             schedule.Add(technicianId, bayId, busySlot);
 
         var now = clock.GetUtcNow();
         var free = schedule.FreeSlots(service, date, now.UtcDateTime, options.Value.AvailabilityStep);
         return Ok(new AvailabilityResponse(profile.Id, service.Code, date, profile.TimeZone.Id, now,
-            free.Select(s => new AvailableSlot(BookingQueries.Local(s.Start, profile.TimeZone), BookingQueries.Local(s.End, profile.TimeZone))).ToArray()));
+            free.Select(s => new AvailableSlot(AppointmentMapping.Local(s.Start, profile.TimeZone), AppointmentMapping.Local(s.End, profile.TimeZone))).ToArray()));
     }
 }

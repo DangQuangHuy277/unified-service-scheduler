@@ -4,6 +4,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Npgsql;
+using Scheduler.Infrastructure.Data;
 using Scheduler.Infrastructure.Messaging;
 using Scheduler.Infrastructure.Persistence;
 
@@ -37,6 +38,14 @@ public static class ServiceRegistration
             .UseNpgsql(sp.GetRequiredService<NpgsqlDataSource>())
             .UseSnakeCaseNamingConvention());
         services.AddSingleton<ReferenceDataCache>();
+
+        // Data access (Data/): every query in the solution lives behind one of these. Stateless, so singletons.
+        services.AddSingleton<ReferenceDataStore>();
+        services.AddSingleton<ReadModelStore>();
+        services.AddSingleton<LeaseStore>();
+        services.AddSingleton<BookingStore>();
+        services.AddSingleton<OutboxStore>();
+        services.AddSingleton<BookingReadQueries>();
         return builder;
     }
 

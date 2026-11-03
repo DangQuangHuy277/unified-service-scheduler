@@ -1,9 +1,9 @@
 using System.Diagnostics;
 using Microsoft.Extensions.Options;
 using Npgsql;
-using NpgsqlTypes;
 using Scheduler.Domain;
 using Scheduler.Infrastructure;
+using Scheduler.Infrastructure.Data;
 using Scheduler.Infrastructure.Messaging;
 
 namespace Scheduler.Worker.Booking;
@@ -20,9 +20,12 @@ public sealed record BatchResult(IReadOnlyList<DecidedRequest> Decided, IReadOnl
 /// fence check → skip already-decided ids → decide in memory → booking_request + customer/vehicle upserts +
 /// appointment + outbox rows → NOTIFY. Kafka offsets are committed only after this returns (at-least-once
 /// delivery, exactly-once effect). Called only from the thread that owns the partition.
+/// This class owns the transaction and the order of steps; every statement lives in the stores (Infrastructure/Data).
 /// </summary>
 public sealed class BookingBatchProcessor(
     NpgsqlDataSource db,
+    LeaseStore leases,
+    BookingStore bookings,
     ReferenceDataCache reference,
     TimeProvider clock,
     IOptions<KafkaOptions> kafka,
@@ -43,9 +46,9 @@ public sealed class BookingBatchProcessor(
         {
             await using var conn = await db.OpenConnectionAsync(ct);
             await using var tx = await conn.BeginTransactionAsync(ct);
-            await PartitionLeaseStore.CheckAsync(conn, tx, kafka.Value.BookingTopic, partition, ct);
+            await leases.CheckAsync(conn, tx, kafka.Value.BookingTopic, partition.Partition, partition.Epoch, ct);
 
-            var alreadyDecided = await AlreadyDecidedAsync(conn, tx, batch, ct);
+            var alreadyDecided = await bookings.FindDecidedAsync(conn, tx, batch.Select(e => e.Command.RequestId).ToArray(), ct);
             var now = clock.GetUtcNow().UtcDateTime;
             var seen = new HashSet<Guid>();
             foreach (var envelope in batch)
@@ -56,7 +59,9 @@ public sealed class BookingBatchProcessor(
                 decided.Add((envelope, await DecideAsync(conn, tx, partition, envelope.Command, now, ct)));
             }
 
-            await BookingBatchWriter.WriteAsync(conn, tx, decided, duplicates, kafka.Value.EventsTopic, now, ct);
+            await bookings.WriteBatchAsync(conn, tx,
+                decided.Select(d => new DecidedBooking(d.Envelope.Command, d.Envelope.EnqueuedAt, d.Decision)).ToArray(),
+                duplicates, kafka.Value.EventsTopic, now, ct);
             await tx.CommitAsync(ct);
         }
         catch (Exception e)
@@ -99,34 +104,13 @@ public sealed class BookingBatchProcessor(
         return schedule.TryReserve(service, command.Start, now);
     }
 
-    private static async Task<DealershipSchedule> LoadScheduleAsync(NpgsqlConnection conn, NpgsqlTransaction tx,
+    private async Task<DealershipSchedule> LoadScheduleAsync(NpgsqlConnection conn, NpgsqlTransaction tx,
         DealershipProfile profile, DateTime now, CancellationToken ct)
     {
         var started = Stopwatch.GetTimestamp();
-        var schedule = new DealershipSchedule(profile);
-        await using var cmd = new NpgsqlCommand("""
-            SELECT technician_id, bay_id, lower(slot), upper(slot)
-              FROM appointment
-             WHERE dealership_id = $1 AND slot && tstzrange($2, NULL)
-            """, conn, tx);
-        cmd.Parameters.Add(new() { Value = profile.Id });
-        cmd.Parameters.Add(new() { Value = now });
-        await using var reader = await cmd.ExecuteReaderAsync(ct);
-        while (await reader.ReadAsync(ct))
-            schedule.Add(reader.GetInt32(0), reader.GetInt32(1), new TimeSlot(reader.GetDateTime(2), reader.GetDateTime(3)));
+        var schedule = await bookings.LoadScheduleAsync(conn, tx, profile, now, ct);
         SchedulerTelemetry.ScheduleLoad.Record(Stopwatch.GetElapsedTime(started).TotalMilliseconds);
         return schedule;
-    }
-
-    private static async Task<HashSet<Guid>> AlreadyDecidedAsync(NpgsqlConnection conn, NpgsqlTransaction tx,
-        IReadOnlyList<CommandEnvelope> batch, CancellationToken ct)
-    {
-        await using var cmd = new NpgsqlCommand("SELECT id FROM booking_request WHERE id = ANY($1)", conn, tx);
-        cmd.Parameters.Add(new() { Value = batch.Select(e => e.Command.RequestId).ToArray(), NpgsqlDbType = NpgsqlDbType.Array | NpgsqlDbType.Uuid });
-        var ids = new HashSet<Guid>();
-        await using var reader = await cmd.ExecuteReaderAsync(ct);
-        while (await reader.ReadAsync(ct)) ids.Add(reader.GetGuid(0));
-        return ids;
     }
 
     /// <summary>One short span per request, parented to the API's publish span, so a single trace runs API → decision.</summary>

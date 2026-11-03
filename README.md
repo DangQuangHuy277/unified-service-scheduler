@@ -119,6 +119,7 @@ Times are ISO 8601 with an offset; responses use the dealership's local offset. 
 ```
 src/Scheduler.Domain          booking rules (no I/O): DealershipSchedule, TimeSlot, OpeningHours
 src/Scheduler.Infrastructure  EF Core schema + migrations, reference-data cache, Kafka, telemetry
+  └─ Data/                     every query: Shared/ (both), Write/ (worker), Read/ (api)
 src/Scheduler.Api             controllers, reply waiter (LISTEN), command publisher, --migrate mode
 src/Scheduler.Worker          booking worker (single writer), outbox relay, availability projector
 tests/                        unit and integration tests

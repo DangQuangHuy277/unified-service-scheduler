@@ -1,19 +1,54 @@
 using Npgsql;
 using NpgsqlTypes;
 using Scheduler.Domain;
-using Scheduler.Infrastructure;
 using Scheduler.Infrastructure.Messaging;
 
-namespace Scheduler.Worker.Booking;
+namespace Scheduler.Infrastructure.Data;
+
+/// <summary>One request the worker has decided, ready to be written.</summary>
+public sealed record DecidedBooking(BookAppointmentCommand Command, DateTime ReceivedAt, BookingDecision Decision);
 
 /// <summary>
-/// The statements of one batch transaction. Each is a single round trip over arrays (<c>unnest</c>), so a
-/// batch costs the same handful of statements whether it holds 1 command or 64.
+/// The booking worker's statements. Every method runs inside the caller's transaction: the batch is
+/// fence → <see cref="FindDecidedAsync"/> → decide → <see cref="WriteBatchAsync"/> → commit, all or nothing.
+/// Writes are single round trips over arrays (<c>unnest</c>), so a batch costs the same handful of statements
+/// whether it holds 1 command or 64.
 /// </summary>
-internal static class BookingBatchWriter
+public sealed class BookingStore
 {
-    public static async Task WriteAsync(NpgsqlConnection conn, NpgsqlTransaction tx,
-        IReadOnlyList<(CommandEnvelope Envelope, BookingDecision Decision)> decided, IReadOnlyList<Guid> duplicates,
+    /// <summary>Request ids that already have an outcome: a Kafka replay, or a client retry with the same Idempotency-Key.</summary>
+    public async Task<HashSet<Guid>> FindDecidedAsync(NpgsqlConnection conn, NpgsqlTransaction tx,
+        IReadOnlyCollection<Guid> requestIds, CancellationToken ct)
+    {
+        await using var cmd = new NpgsqlCommand("SELECT id FROM booking_request WHERE id = ANY($1)", conn, tx);
+        cmd.Parameters.Add(new() { Value = requestIds.ToArray(), NpgsqlDbType = NpgsqlDbType.Array | NpgsqlDbType.Uuid });
+        var ids = new HashSet<Guid>();
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct)) ids.Add(reader.GetGuid(0));
+        return ids;
+    }
+
+    /// <summary>One dealership's appointments that end after <paramref name="fromUtc"/>, as an in-memory schedule.</summary>
+    public async Task<DealershipSchedule> LoadScheduleAsync(NpgsqlConnection conn, NpgsqlTransaction tx,
+        DealershipProfile profile, DateTime fromUtc, CancellationToken ct)
+    {
+        var schedule = new DealershipSchedule(profile);
+        await using var cmd = new NpgsqlCommand("""
+            SELECT technician_id, bay_id, lower(slot), upper(slot)
+              FROM appointment
+             WHERE dealership_id = $1 AND slot && tstzrange($2, NULL)
+            """, conn, tx);
+        cmd.Parameters.Add(new() { Value = profile.Id });
+        cmd.Parameters.Add(new() { Value = fromUtc });
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+            schedule.Add(reader.GetInt32(0), reader.GetInt32(1), new TimeSlot(reader.GetDateTime(2), reader.GetDateTime(3)));
+        return schedule;
+    }
+
+    /// <summary>Outcomes, customers, vehicles, appointments, outbox events and NOTIFY for one decided batch.</summary>
+    public async Task WriteBatchAsync(NpgsqlConnection conn, NpgsqlTransaction tx,
+        IReadOnlyList<DecidedBooking> decided, IReadOnlyList<Guid> duplicates,
         string eventsTopic, DateTime now, CancellationToken ct)
     {
         if (decided.Count > 0) await InsertBookingRequestsAsync(conn, tx, decided, now, ct);
@@ -29,12 +64,12 @@ internal static class BookingBatchWriter
 
         // Delivered to listeners only when the transaction commits. Duplicates are included so an API instance
         // waiting on a retried request still wakes up and reads the stored outcome.
-        var ids = decided.Select(d => d.Envelope.Command.RequestId).Concat(duplicates).ToArray();
+        var ids = decided.Select(d => d.Command.RequestId).Concat(duplicates).ToArray();
         if (ids.Length > 0) await NotifyAsync(conn, tx, ids, outboxPending: confirmed.Length > 0, ct);
     }
 
     private static async Task InsertBookingRequestsAsync(NpgsqlConnection conn, NpgsqlTransaction tx,
-        IReadOnlyList<(CommandEnvelope Envelope, BookingDecision Decision)> decided, DateTime now, CancellationToken ct)
+        IReadOnlyList<DecidedBooking> decided, DateTime now, CancellationToken ct)
     {
         await using var cmd = new NpgsqlCommand("""
             INSERT INTO booking_request (id, dealership_id, service_type_code, requested_start, outcome, received_at, decided_at)
@@ -42,21 +77,21 @@ internal static class BookingBatchWriter
               FROM unnest($1::uuid[], $2::int[], $3::text[], $4::timestamptz[], $5::text[], $6::timestamptz[])
                    AS x(id, d, s, st, o, r)
             """, conn, tx);
-        cmd.Parameters.Add(new() { Value = decided.Select(d => d.Envelope.Command.RequestId).ToArray() });
-        cmd.Parameters.Add(new() { Value = decided.Select(d => d.Envelope.Command.DealershipId).ToArray() });
-        cmd.Parameters.Add(new() { Value = decided.Select(d => d.Envelope.Command.ServiceTypeCode).ToArray() });
-        cmd.Parameters.Add(new() { Value = decided.Select(d => d.Envelope.Command.Start).ToArray() });
+        cmd.Parameters.Add(new() { Value = decided.Select(d => d.Command.RequestId).ToArray() });
+        cmd.Parameters.Add(new() { Value = decided.Select(d => d.Command.DealershipId).ToArray() });
+        cmd.Parameters.Add(new() { Value = decided.Select(d => d.Command.ServiceTypeCode).ToArray() });
+        cmd.Parameters.Add(new() { Value = decided.Select(d => d.Command.Start).ToArray() });
         cmd.Parameters.Add(new() { Value = decided.Select(d => d.Decision.Outcome.ToString()).ToArray() });
-        cmd.Parameters.Add(new() { Value = decided.Select(d => d.Envelope.EnqueuedAt).ToArray() });
+        cmd.Parameters.Add(new() { Value = decided.Select(d => d.ReceivedAt).ToArray() });
         cmd.Parameters.Add(new() { Value = now });
         await cmd.ExecuteNonQueryAsync(ct);
     }
 
     /// <summary>Customers are matched by email. Deduplicated first: ON CONFLICT can't touch one row twice.</summary>
     private static async Task<Dictionary<string, long>> UpsertCustomersAsync(NpgsqlConnection conn, NpgsqlTransaction tx,
-        IReadOnlyList<(CommandEnvelope Envelope, BookingDecision Decision)> confirmed, CancellationToken ct)
+        IReadOnlyList<DecidedBooking> confirmed, CancellationToken ct)
     {
-        var latest = confirmed.Select(c => c.Envelope.Command.Customer)
+        var latest = confirmed.Select(c => c.Command.Customer)
             .GroupBy(c => c.Email, StringComparer.Ordinal).Select(g => g.Last()).ToArray();
         await using var cmd = new NpgsqlCommand("""
             INSERT INTO customer (email, name)
@@ -71,10 +106,10 @@ internal static class BookingBatchWriter
 
     /// <summary>Vehicles are matched by VIN and point at the customer who booked them most recently.</summary>
     private static async Task<Dictionary<string, long>> UpsertVehiclesAsync(NpgsqlConnection conn, NpgsqlTransaction tx,
-        IReadOnlyList<(CommandEnvelope Envelope, BookingDecision Decision)> confirmed,
+        IReadOnlyList<DecidedBooking> confirmed,
         Dictionary<string, long> customerIds, CancellationToken ct)
     {
-        var latest = confirmed.Select(c => c.Envelope.Command)
+        var latest = confirmed.Select(c => c.Command)
             .GroupBy(c => c.Vehicle.Vin, StringComparer.Ordinal).Select(g => g.Last()).ToArray();
         await using var cmd = new NpgsqlCommand("""
             INSERT INTO vehicle (vin, make, model, customer_id)
@@ -90,7 +125,7 @@ internal static class BookingBatchWriter
     }
 
     private static async Task<Dictionary<Guid, long>> InsertAppointmentsAsync(NpgsqlConnection conn, NpgsqlTransaction tx,
-        IReadOnlyList<(CommandEnvelope Envelope, BookingDecision Decision)> confirmed,
+        IReadOnlyList<DecidedBooking> confirmed,
         Dictionary<string, long> customerIds, Dictionary<string, long> vehicleIds, CancellationToken ct)
     {
         await using var cmd = new NpgsqlCommand("""
@@ -101,7 +136,7 @@ internal static class BookingBatchWriter
                           $8::timestamptz[], $9::timestamptz[]) AS x(r, d, c, v, s, t, b, st, en)
             RETURNING booking_request_id, id
             """, conn, tx);
-        var commands = confirmed.Select(c => c.Envelope.Command).ToArray();
+        var commands = confirmed.Select(c => c.Command).ToArray();
         cmd.Parameters.Add(new() { Value = commands.Select(c => c.RequestId).ToArray() });
         cmd.Parameters.Add(new() { Value = commands.Select(c => c.DealershipId).ToArray() });
         cmd.Parameters.Add(new() { Value = commands.Select(c => customerIds[c.Customer.Email]).ToArray() });
@@ -119,12 +154,12 @@ internal static class BookingBatchWriter
     }
 
     private static async Task InsertOutboxAsync(NpgsqlConnection conn, NpgsqlTransaction tx,
-        IReadOnlyList<(CommandEnvelope Envelope, BookingDecision Decision)> confirmed,
+        IReadOnlyList<DecidedBooking> confirmed,
         Dictionary<Guid, long> appointmentIds, string topic, DateTime now, CancellationToken ct)
     {
         var events = confirmed.Select(c => new AppointmentConfirmedEvent(
-            appointmentIds[c.Envelope.Command.RequestId], c.Envelope.Command.RequestId, c.Envelope.Command.DealershipId,
-            c.Envelope.Command.ServiceTypeCode, c.Decision.TechnicianId!.Value, c.Decision.BayId!.Value,
+            appointmentIds[c.Command.RequestId], c.Command.RequestId, c.Command.DealershipId,
+            c.Command.ServiceTypeCode, c.Decision.TechnicianId!.Value, c.Decision.BayId!.Value,
             c.Decision.Slot!.Value.Start, c.Decision.Slot!.Value.End, now)).ToArray();
 
         await using var cmd = new NpgsqlCommand("""

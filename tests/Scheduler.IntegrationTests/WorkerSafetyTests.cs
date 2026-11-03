@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Npgsql;
 using Scheduler.Infrastructure;
+using Scheduler.Infrastructure.Data;
 using Scheduler.Infrastructure.Messaging;
 using Scheduler.IntegrationTests.Infrastructure;
 using Scheduler.Worker.Booking;
@@ -27,7 +28,7 @@ public sealed class WorkerSafetyTests(Containers containers)
         await using var env = await TestEnvironment.CreateAsync(containers, Seed, startWorkers: false);
         var services = env.BuildWorkerServices();
         var processor = services.GetRequiredService<BookingBatchProcessor>();
-        var leases = services.GetRequiredService<PartitionLeaseStore>();
+        var leases = services.GetRequiredService<LeaseStore>();
         var topic = services.GetRequiredService<IOptions<KafkaOptions>>().Value.BookingTopic;
         var batch = new[] { Envelope(Guid.CreateVersion7(), At(10)) };
 
@@ -50,7 +51,7 @@ public sealed class WorkerSafetyTests(Containers containers)
         await using var env = await TestEnvironment.CreateAsync(containers, Seed, startWorkers: false);
         var services = env.BuildWorkerServices();
         var processor = services.GetRequiredService<BookingBatchProcessor>();
-        var leases = services.GetRequiredService<PartitionLeaseStore>();
+        var leases = services.GetRequiredService<LeaseStore>();
         var topic = services.GetRequiredService<IOptions<KafkaOptions>>().Value.BookingTopic;
 
         var stale = new PartitionState(0, await leases.AcquireAsync(topic, 0, "stale", Ct));

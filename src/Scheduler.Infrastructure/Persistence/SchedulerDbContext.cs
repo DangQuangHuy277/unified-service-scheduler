@@ -5,7 +5,7 @@ namespace Scheduler.Infrastructure.Persistence;
 
 /// <summary>
 /// Owns the schema and migrations (D-003). The worker's hot path writes with plain Npgsql commands
-/// (BookingBatchWriter) so each batch stays one transaction with a handful of statements.
+/// (Data/Write/BookingStore) so each batch stays one transaction with a handful of statements.
 /// </summary>
 public sealed class SchedulerDbContext(DbContextOptions<SchedulerDbContext> options) : DbContext(options)
 {

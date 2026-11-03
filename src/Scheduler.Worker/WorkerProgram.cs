@@ -21,7 +21,6 @@ public static class WorkerProgram
         builder.AddSchedulerData().AddSchedulerKafka().AddSchedulerTelemetry("scheduler-worker");
         builder.Services.AddOptions<WorkerOptions>().BindConfiguration(WorkerOptions.Section);
         builder.Services.AddSingleton<PartitionOwnership>();
-        builder.Services.AddSingleton<PartitionLeaseStore>();
         builder.Services.AddSingleton<BookingBatchProcessor>();
 
         var roles = builder.Configuration.GetSection(WorkerOptions.Section).Get<WorkerOptions>() ?? new WorkerOptions();
